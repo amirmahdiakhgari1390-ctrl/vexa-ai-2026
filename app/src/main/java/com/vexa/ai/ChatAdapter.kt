@@ -47,7 +47,7 @@ class ChatAdapter(private val items: MutableList<ChatMessage>) : RecyclerView.Ad
         val timeView: TextView
     ) : RecyclerView.ViewHolder(wrapper)
 
-    private fun dp(ctx: Context, v: Int) = (v * ctx.resources.displayMetrics.density).toInt()
+    private fun dp(ctx: Context, v: Int): Int = (v * ctx.resources.displayMetrics.density).toInt()
 
     private fun pillBg(ctx: Context, fillHex: String, strokeHex: String): GradientDrawable = GradientDrawable().apply {
         setColor(Color.parseColor(fillHex))
