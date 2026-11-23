@@ -9,15 +9,21 @@ import android.graphics.Color
 import android.graphics.LinearGradient
 import android.graphics.Paint
 import android.graphics.Shader
+import android.os.Environment
 import android.util.Base64
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.ByteArrayOutputStream
+import java.io.File
+import java.io.FileOutputStream
 import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
+import java.text.SimpleDateFormat
+import java.util.Date
 import java.util.Locale
+import java.util.UUID
 
 class VexaCoreClient(
     private val prefs: SharedPreferences,
@@ -175,6 +181,37 @@ class VexaCoreClient(
         return AiResult(caption, generatedImage = bmp)
     }
 
+    private fun tryFetchServerVideo(ctx: Context, promptEn: String): FileGenerator.GeneratedFile? {
+        val base = getGatewayUrl().trimEnd('/')
+        val enc = URLEncoder.encode(promptEn, "UTF-8")
+        var conn: HttpURLConnection? = null
+        return try {
+            conn = URL("$base/video?prompt=$enc").openConnection() as HttpURLConnection
+            conn.connectTimeout = 15000
+            conn.readTimeout = 45000
+            conn.setRequestProperty("User-Agent", "VexaAI-Android/17.0")
+            if (conn.responseCode == 200) {
+                val cType = conn.contentType.orEmpty().lowercase(Locale.ROOT)
+                if (cType.contains("video/mp4")) {
+                    val bytes = conn.inputStream.use { it.readBytes() }
+                    if (bytes.size > 4000) {
+                        val outDir = File(ctx.getExternalFilesDir(Environment.DIRECTORY_MOVIES), "VexaVideos")
+                        if (!outDir.exists()) outDir.mkdirs()
+                        val stamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
+                        val file = File(outDir, "Vexa_Cloud_${stamp}_${UUID.randomUUID().toString().take(6)}.mp4")
+                        FileOutputStream(file).use { it.write(bytes) }
+                        return FileGenerator.GeneratedFile(file, "video/mp4", file.name)
+                    }
+                }
+            }
+            null
+        } catch (_: Exception) {
+            null
+        } finally {
+            try { conn?.disconnect() } catch (_: Exception) { }
+        }
+    }
+
     @Synchronized
     fun generateVideo(ctx: Context, rawPrompt: String, isFa: Boolean): AiResult {
         if (containsBlockedContent(rawPrompt)) {
@@ -183,6 +220,15 @@ class VexaCoreClient(
             return AiResult(msg)
         }
         val baseEn = craftRichVisualPrompt(rawPrompt, isLogo = false)
+
+        // اگر سرور خروجی مستقیم MP4 بدهد، همان را برمی‌گرداند
+        tryFetchServerVideo(ctx, baseEn)?.let { cloudVideo ->
+            val msg = if (isFa) "🎬 ویدیوی ساخته شده آماده است:\n«$rawPrompt»"
+            else "🎬 Video ready:\n\"$rawPrompt\""
+            return AiResult(msg, generatedFile = cloudVideo)
+        }
+
+        // در غیر این صورت، صحنه‌های سینمایی را گرفته و فایل MP4 می‌سازد
         val scenePrompts = listOf(
             "$baseEn, wide establishing cinematic shot, ultra detailed, 8k",
             "$baseEn, dynamic medium action shot, dramatic lighting, 8k",
@@ -242,12 +288,6 @@ class VexaCoreClient(
         return bmp
     }
 
-    /**
-     * Multi-route image fetcher:
-     * 1) Cloudflare Worker /image (Workers AI Flux/SDXL)
-     * 2) Pollinations Flux & Turbo endpoints
-     * 3) Guaranteed local studio bitmap fallback so generation always returns a visual
-     */
     private fun fetchBitmapMultiFallback(
         promptEn: String,
         rawTitle: String,
@@ -286,18 +326,13 @@ class VexaCoreClient(
         return renderFallbackFrame(rawTitle, isLogo, sceneIdx)
     }
 
-    /**
-     * Multi-source live web & market search:
-     * 1) Cloudflare Worker /search?q=...
-     * 2) Direct GoldPrice XAU/USD + Frankfurter FX rates when market/gold/currency terms appear
-     * 3) Direct DuckDuckGo Instant Answer API fallback
-     */
     fun searchWebLive(query: String): String {
         val sb = StringBuilder()
         val base = getGatewayUrl().trimEnd('/')
         val enc = URLEncoder.encode(query, "UTF-8")
+        val isFa = isPersianText(query)
 
-        // Source 1: Cloudflare Worker /search
+        // ۱) جست‌وجو از مسیر /search ورکر
         var conn: HttpURLConnection? = null
         try {
             conn = URL("$base/search?q=$enc").openConnection() as HttpURLConnection
@@ -314,7 +349,7 @@ class VexaCoreClient(
                         val snippet = item.optString("snippet", "").trim()
                         val link = item.optString("link", "").trim()
                         if (title.isNotEmpty()) {
-                            sb.append("${i + 1}. $title\n")
+                            sb.append("${i + 1}.$title\n")
                             if (snippet.isNotEmpty()) sb.append("   $snippet\n")
                             if (link.isNotEmpty()) sb.append("   Source: $link\n")
                         }
@@ -326,9 +361,36 @@ class VexaCoreClient(
             try { conn?.disconnect() } catch (_: Exception) { }
         }
 
-        // Source 2: Direct Gold & FX fallback if user asks about gold / coin / dollar / exchange rates
+        // ۲) پشتیبان مستقیم Wikipedia اگر ورکر نتیجه‌ای نداد
+        if (sb.isEmpty()) {
+            try {
+                val lang = if (isFa) "fa" else "en"
+                val wUrl = "https://$lang.wikipedia.org/w/api.php?action=query&list=search&srsearch=$enc&format=json&srlimit=4"
+                val wConn = URL(wUrl).openConnection() as HttpURLConnection
+                wConn.connectTimeout = 10000
+                wConn.readTimeout = 15000
+                wConn.setRequestProperty("User-Agent", "VexaAI-Android/17.0")
+                if (wConn.responseCode == 200) {
+                    val wTxt = wConn.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
+                    val srArr = JSONObject(wTxt).optJSONObject("query")?.optJSONArray("search")
+                    if (srArr != null) {
+                        for (i in 0 until srArr.length()) {
+                            val o = srArr.getJSONObject(i)
+                            val title = o.optString("title", "")
+                            val snip = o.optString("snippet", "").replace(Regex("<[^>]+>"), "").trim()
+                            if (title.isNotEmpty()) {
+                                sb.append("${i + 1}. $title (Wikipedia)\n$snip\n")
+                            }
+                        }
+                    }
+                }
+                wConn.disconnect()
+            } catch (_: Exception) { }
+        }
+
+        // ۳) پشتیبان نرخ جهانی طلا برای سوالات مرتبط با طلا/سکه/دلار
         val low = query.lowercase(Locale.ROOT)
-        if (Regex("(طلا|gold|سکه|دلار|ارز|یورو|درهم|قیمت|نرخ|usd|eur|xau)").containsMatchIn(low)) {
+        if (Regex("(طلا|gold|سکه|دلار|xau)").containsMatchIn(low) && !sb.contains("XAU/USD")) {
             try {
                 val gConn = URL("https://data-asg.goldprice.org/dbXRates/USD").openConnection() as HttpURLConnection
                 gConn.connectTimeout = 8000
@@ -338,31 +400,11 @@ class VexaCoreClient(
                     val gTxt = gConn.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
                     val item = JSONObject(gTxt).optJSONArray("items")?.optJSONObject(0)
                     val xau = item?.optDouble("xauPrice", 0.0) ?: 0.0
-                    val xag = item?.optDouble("xagPrice", 0.0) ?: 0.0
                     if (xau > 0.0) {
                         sb.append("- Global Spot Gold (XAU/USD): $").append(xau).append(" per troy oz\n")
                     }
-                    if (xag > 0.0) {
-                        sb.append("- Global Spot Silver (XAG/USD): $").append(xag).append(" per troy oz\n")
-                    }
                 }
                 gConn.disconnect()
-            } catch (_: Exception) { }
-        }
-
-        // Source 3: Direct DuckDuckGo Instant API fallback if still empty
-        if (sb.isEmpty()) {
-            try {
-                val dConn = URL("https://api.duckduckgo.com/?q=$enc&format=json&no_html=1&skip_disambig=1").openConnection() as HttpURLConnection
-                dConn.connectTimeout = 8000
-                dConn.readTimeout = 10000
-                dConn.setRequestProperty("User-Agent", "Mozilla/5.0")
-                if (dConn.responseCode == 200) {
-                    val dJson = JSONObject(dConn.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() })
-                    val abs = dJson.optString("AbstractText", "").trim()
-                    if (abs.isNotEmpty()) sb.append("- ").append(dJson.optString("Heading", query)).append(": ").append(abs).append("\n")
-                }
-                dConn.disconnect()
             } catch (_: Exception) { }
         }
 
