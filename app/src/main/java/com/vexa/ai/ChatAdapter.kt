@@ -47,13 +47,13 @@ class ChatAdapter(private val items: MutableList<ChatMessage>) : RecyclerView.Ad
         val timeView: TextView
     ) : RecyclerView.ViewHolder(wrapper)
 
-    private fun toPx(ctx: Context, valueDp: Int): Int =
-        (valueDp * ctx.resources.displayMetrics.density).toInt()
+    private fun scaleDp(ctx: Context, dpVal: Int): Int =
+        (dpVal * ctx.resources.displayMetrics.density).toInt()
 
     private fun pillBg(ctx: Context, fillHex: String, strokeHex: String): GradientDrawable = GradientDrawable().apply {
         setColor(Color.parseColor(fillHex))
-        cornerRadius = toPx(ctx, 10).toFloat()
-        setStroke(toPx(ctx, 1), Color.parseColor(strokeHex))
+        cornerRadius = scaleDp(ctx, 10).toFloat()
+        setStroke(scaleDp(ctx, 1), Color.parseColor(strokeHex))
     }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): Holder {
@@ -63,30 +63,30 @@ class ChatAdapter(private val items: MutableList<ChatMessage>) : RecyclerView.Ad
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
             ).apply {
-                topMargin = toPx(ctx, 6)
-                bottomMargin = toPx(ctx, 6)
+                topMargin = scaleDp(ctx, 6)
+                bottomMargin = scaleDp(ctx, 6)
             }
         }
         val card = LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(toPx(ctx, 14), toPx(ctx, 10), toPx(ctx, 14), toPx(ctx, 8))
-            elevation = toPx(ctx, 2).toFloat()
+            setPadding(scaleDp(ctx, 14), scaleDp(ctx, 10), scaleDp(ctx, 14), scaleDp(ctx, 8))
+            elevation = scaleDp(ctx, 2).toFloat()
         }
         val headerView = TextView(ctx).apply {
             textSize = 11f
             typeface = Typeface.DEFAULT_BOLD
-            setPadding(0, 0, 0, toPx(ctx, 4))
+            setPadding(0, 0, 0, scaleDp(ctx, 4))
         }
         val imageView = ImageView(ctx).apply {
             scaleType = ImageView.ScaleType.FIT_CENTER
             adjustViewBounds = true
             visibility = View.GONE
             layoutParams = LinearLayout.LayoutParams(
-                toPx(ctx, 260),
+                scaleDp(ctx, 260),
                 ViewGroup.LayoutParams.WRAP_CONTENT
             ).apply {
-                topMargin = toPx(ctx, 4)
-                bottomMargin = toPx(ctx, 6)
+                topMargin = scaleDp(ctx, 4)
+                bottomMargin = scaleDp(ctx, 6)
             }
         }
         val saveImgBtn = Button(ctx).apply {
@@ -94,13 +94,13 @@ class ChatAdapter(private val items: MutableList<ChatMessage>) : RecyclerView.Ad
             textSize = 11f
             setTextColor(Color.WHITE)
             background = pillBg(ctx, "#0D9488", "#10A37F")
-            setPadding(toPx(ctx, 12), toPx(4), toPx(ctx, 12), toPx(4))
+            setPadding(scaleDp(ctx, 12), scaleDp(4), scaleDp(ctx, 12), scaleDp(4))
             visibility = View.GONE
             layoutParams = LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT,
-                toPx(ctx, 34)
+                scaleDp(ctx, 34)
             ).apply {
-                bottomMargin = toPx(ctx, 6)
+                bottomMargin = scaleDp(ctx, 6)
             }
         }
         val bodyView = TextView(ctx).apply {
@@ -110,7 +110,7 @@ class ChatAdapter(private val items: MutableList<ChatMessage>) : RecyclerView.Ad
         val fileActionRow = LinearLayout(ctx).apply {
             orientation = LinearLayout.HORIZONTAL
             visibility = View.GONE
-            setPadding(0, toPx(ctx, 8), 0, toPx(ctx, 2))
+            setPadding(0, scaleDp(ctx, 8), 0, scaleDp(ctx, 2))
         }
         val openFileBtn = Button(ctx).apply {
             text = "▶️ پخش / باز کردن"
@@ -118,12 +118,12 @@ class ChatAdapter(private val items: MutableList<ChatMessage>) : RecyclerView.Ad
             typeface = Typeface.DEFAULT_BOLD
             setTextColor(Color.parseColor("#09090B"))
             background = pillBg(ctx, "#10A37F", "#34D399")
-            setPadding(toPx(ctx, 12), toPx(2), toPx(ctx, 12), toPx(2))
+            setPadding(scaleDp(ctx, 12), scaleDp(2), scaleDp(ctx, 12), scaleDp(2))
             layoutParams = LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT,
-                toPx(ctx, 36)
+                scaleDp(ctx, 36)
             ).apply {
-                marginEnd = toPx(ctx, 8)
+                marginEnd = scaleDp(ctx, 8)
             }
         }
         val shareFileBtn = Button(ctx).apply {
@@ -131,10 +131,10 @@ class ChatAdapter(private val items: MutableList<ChatMessage>) : RecyclerView.Ad
             textSize = 11.5f
             setTextColor(Color.parseColor("#E4E4E7"))
             background = pillBg(ctx, "#27272A", "#3F3F46")
-            setPadding(toPx(ctx, 12), toPx(2), toPx(ctx, 12), toPx(2))
+            setPadding(scaleDp(ctx, 12), scaleDp(2), scaleDp(ctx, 12), scaleDp(2))
             layoutParams = LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT,
-                toPx(ctx, 36)
+                scaleDp(ctx, 36)
             )
         }
         fileActionRow.addView(openFileBtn)
@@ -142,7 +142,7 @@ class ChatAdapter(private val items: MutableList<ChatMessage>) : RecyclerView.Ad
 
         val timeView = TextView(ctx).apply {
             textSize = 10f
-            setPadding(0, toPx(ctx, 4), 0, 0)
+            setPadding(0, scaleDp(ctx, 4), 0, 0)
             gravity = Gravity.END
         }
 
@@ -183,10 +183,10 @@ class ChatAdapter(private val items: MutableList<ChatMessage>) : RecyclerView.Ad
         when (item.sender) {
             ChatMessage.Sender.USER -> {
                 lp.gravity = Gravity.END
-                lp.marginStart = toPx(ctx, 32)
+                lp.marginStart = scaleDp(ctx, 32)
                 bg.setColor(Color.parseColor("#27272A"))
-                bg.setStroke(toPx(ctx, 1), Color.parseColor("#3F3F46"))
-                bg.cornerRadius = toPx(ctx, 18).toFloat()
+                bg.setStroke(scaleDp(ctx, 1), Color.parseColor("#3F3F46"))
+                bg.cornerRadius = scaleDp(ctx, 18).toFloat()
                 holder.headerView.text = if (isFa) "شما" else "You"
                 holder.headerView.setTextColor(Color.parseColor("#A1A1AA"))
                 holder.bodyView.setTextColor(Color.parseColor("#FAFAFA"))
@@ -195,10 +195,10 @@ class ChatAdapter(private val items: MutableList<ChatMessage>) : RecyclerView.Ad
             }
             ChatMessage.Sender.VEXA -> {
                 lp.gravity = Gravity.START
-                lp.marginEnd = toPx(ctx, 22)
+                lp.marginEnd = scaleDp(ctx, 22)
                 bg.setColor(Color.parseColor("#121215"))
-                bg.setStroke(toPx(ctx, 1), Color.parseColor("#27272A"))
-                bg.cornerRadius = toPx(ctx, 18).toFloat()
+                bg.setStroke(scaleDp(ctx, 1), Color.parseColor("#27272A"))
+                bg.cornerRadius = scaleDp(ctx, 18).toFloat()
                 holder.headerView.text = "VEXA AI"
                 holder.headerView.setTextColor(Color.parseColor("#10A37F"))
                 holder.bodyView.setTextColor(Color.parseColor("#F4F4F5"))
@@ -208,8 +208,8 @@ class ChatAdapter(private val items: MutableList<ChatMessage>) : RecyclerView.Ad
             ChatMessage.Sender.SYSTEM -> {
                 lp.gravity = Gravity.CENTER_HORIZONTAL
                 bg.setColor(Color.parseColor("#18181B"))
-                bg.setStroke(toPx(ctx, 1), Color.parseColor("#3F3F46"))
-                bg.cornerRadius = toPx(ctx, 14).toFloat()
+                bg.setStroke(scaleDp(ctx, 1), Color.parseColor("#3F3F46"))
+                bg.cornerRadius = scaleDp(ctx, 14).toFloat()
                 holder.headerView.text = "VEXA"
                 holder.headerView.setTextColor(Color.parseColor("#10A37F"))
                 holder.bodyView.setTextColor(Color.parseColor("#D4D4D8"))
