@@ -145,8 +145,24 @@ class VexaCoreClient(
             return if (isLogo) "minimalist modern vector logo icon, clean lines"
             else "cinematic realistic photography, high detail, crisp focus"
         }
+        if (isPersianText(cleaned)) {
+            val sys = if (isLogo) {
+                "Translate this logo request into a precise English prompt for an image generator. Keep the exact subject, text/initials, and colors requested. Output ONLY the English prompt."
+            } else {
+                "Translate this image description literally and accurately into English for an image generator. Preserve every object, color, theme, and detail requested without adding unrelated people or changing the subject. Output ONLY the English prompt."
+            }
+            for (m in listOf("google/gemma-3-27b-it:free", "meta-llama/llama-3.3-70b-instruct:free")) {
+                try {
+                    val tr = callGateway(m, cleaned, null, sys, includeHistory = false, temperature = 0.1)
+                        .replace(Regex("<think>[\\s\\S]*?</think>"), "")
+                        .replace(Regex("^[\"']|[\"']$"), "")
+                        .trim()
+                    if (tr.length >= 3) return tr
+                } catch (_: Exception) { }
+            }
+        }
         return if (isLogo) {
-            "$cleaned, minimalist modern vector logo icon, clean composition, high contrast"
+            "$cleaned, minimalist modern vector logo icon, clean composition"
         } else {
             "$cleaned, realistic lighting, sharp focus, high detail"
         }
