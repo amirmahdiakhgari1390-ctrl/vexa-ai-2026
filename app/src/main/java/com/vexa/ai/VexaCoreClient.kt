@@ -140,24 +140,15 @@ class VexaCoreClient(
     }
 
     private fun craftRichVisualPrompt(rawUserRequest: String, isLogo: Boolean): String {
-        val sys = if (isLogo) {
-            "Convert the logo idea into a concise, clean English visual prompt for an AI image generator (minimalist vector icon, centered, solid background, high contrast). Output ONLY the English prompt."
-        } else {
-            "Expand and translate the user's image request into a vivid, detailed, photorealistic English prompt describing subject, composition, lighting, colors, atmosphere, and camera style. Output ONLY the English prompt."
-        }
-        for (m in listOf("google/gemma-3-27b-it:free", "meta-llama/llama-3.3-70b-instruct:free", "openai")) {
-            try {
-                val res = callGateway(m, rawUserRequest, null, sys, includeHistory = false, temperature = 0.5)
-                    .replace("\"", "")
-                    .replace("\n", " ")
-                    .trim()
-                if (res.length >= 4 && !isPersianText(res)) return res
-            } catch (_: Exception) { }
+        val cleaned = rawUserRequest.trim()
+        if (cleaned.isEmpty()) {
+            return if (isLogo) "minimalist modern vector logo icon, clean lines"
+            else "cinematic realistic photography, high detail, crisp focus"
         }
         return if (isLogo) {
-            "minimalist modern vector logo icon, clean lines, professional graphic design, centered, solid background"
+            "$cleaned, minimalist modern vector logo icon, clean composition, high contrast"
         } else {
-            "$rawUserRequest, photorealistic, cinematic lighting, 8k resolution, sharp focus"
+            "$cleaned, realistic lighting, sharp focus, high detail"
         }
     }
 
@@ -221,14 +212,12 @@ class VexaCoreClient(
         }
         val baseEn = craftRichVisualPrompt(rawPrompt, isLogo = false)
 
-        // اگر سرور خروجی مستقیم MP4 بدهد، همان را برمی‌گرداند
         tryFetchServerVideo(ctx, baseEn)?.let { cloudVideo ->
             val msg = if (isFa) "🎬 ویدیوی ساخته شده آماده است:\n«$rawPrompt»"
             else "🎬 Video ready:\n\"$rawPrompt\""
             return AiResult(msg, generatedFile = cloudVideo)
         }
 
-        // در غیر این صورت، صحنه‌های سینمایی را گرفته و فایل MP4 می‌سازد
         val scenePrompts = listOf(
             "$baseEn, wide establishing cinematic shot, ultra detailed, 8k",
             "$baseEn, dynamic medium action shot, dramatic lighting, 8k",
@@ -299,15 +288,15 @@ class VexaCoreClient(
         val base = getGatewayUrl().trimEnd('/')
         val endpoints = listOf(
             "$base/image?prompt=$enc&seed=$seed",
-            "https://image.pollinations.ai/prompt/$enc?width=1024&height=1024&seed=$seed&nologo=true&model=flux",
-            "https://image.pollinations.ai/prompt/$enc?width=1024&height=1024&seed=${seed + 7}&nologo=true&model=turbo"
+            "https://image.pollinations.ai/prompt/$enc?width=768&height=768&seed=$seed&nologo=true&model=flux",
+            "https://image.pollinations.ai/prompt/$enc?width=768&height=768&seed=${seed + 13}&nologo=true&model=turbo"
         )
         for (u in endpoints) {
             var conn: HttpURLConnection? = null
             try {
                 conn = URL(u).openConnection() as HttpURLConnection
-                conn.connectTimeout = 14000
-                conn.readTimeout = 40000
+                conn.connectTimeout = 10000
+                conn.readTimeout = 25000
                 conn.instanceFollowRedirects = true
                 conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 14)")
                 conn.setRequestProperty("Accept", "image/*,*/*")
@@ -332,7 +321,6 @@ class VexaCoreClient(
         val enc = URLEncoder.encode(query, "UTF-8")
         val isFa = isPersianText(query)
 
-        // ۱) جست‌وجو از مسیر /search ورکر
         var conn: HttpURLConnection? = null
         try {
             conn = URL("$base/search?q=$enc").openConnection() as HttpURLConnection
@@ -361,7 +349,6 @@ class VexaCoreClient(
             try { conn?.disconnect() } catch (_: Exception) { }
         }
 
-        // ۲) پشتیبان مستقیم Wikipedia اگر ورکر نتیجه‌ای نداد
         if (sb.isEmpty()) {
             try {
                 val lang = if (isFa) "fa" else "en"
@@ -388,7 +375,6 @@ class VexaCoreClient(
             } catch (_: Exception) { }
         }
 
-        // ۳) پشتیبان نرخ جهانی طلا برای سوالات مرتبط با طلا/سکه/دلار
         val low = query.lowercase(Locale.ROOT)
         if (Regex("(طلا|gold|سکه|دلار|xau)").containsMatchIn(low) && !sb.contains("XAU/USD")) {
             try {
