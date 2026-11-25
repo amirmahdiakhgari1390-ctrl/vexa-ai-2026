@@ -75,6 +75,15 @@ class VexaCoreClient(
         "openai"
     )
 
+    // مدل‌های اولویت‌دار برای اسکن و تحلیل تصویر (شامل سوالات، متن، جدول و اشیا)
+    private val visionModels = listOf(
+        "google/gemma-3-27b-it:free",
+        "qwen/qwen3-235b-a22b:free",
+        "meta-llama/llama-3.3-70b-instruct:free",
+        "openrouter/free",
+        "openai"
+    )
+
     private val maxHistory = 36
     private val history = ArrayList<Pair<String, String>>()
 
@@ -444,17 +453,31 @@ class VexaCoreClient(
         userDisplayName: String = ""
     ): AiResult {
         memory.autoLearnFromUserMessage(text)
-        val isFa = isPersianText(text)
+        val effectiveText = if (image != null && text.isBlank()) {
+            "تمام متن‌ها، سوالات، گزینه‌ها، اعداد و جزئیات این عکس را با دقت بخوان و به هر سوال داخل آن پاسخ کامل و دقیق بده."
+        } else {
+            text
+        }
+        val isFa = isPersianText(effectiveText) || (image != null && text.isBlank())
         val activePersona = forcePersona ?: getPersona()
         val iq = getIntelligenceLevel()
-        val candidateModels = if (iq == IntelligenceLevel.DEEP_THINK) deepModels else fastModels
-        val temp = if (iq == IntelligenceLevel.DEEP_THINK) 0.35 else 0.55
+        val candidateModels = if (image != null) {
+            visionModels
+        } else if (iq == IntelligenceLevel.DEEP_THINK) {
+            deepModels
+        } else {
+            fastModels
+        }
+        val temp = if (image != null) 0.2 else if (iq == IntelligenceLevel.DEEP_THINK) 0.35 else 0.55
 
-        val doSearch = (image == null) && (forceWebSearch || shouldAutoSearchWeb(text))
-        val webContext = if (doSearch) searchWebLive(text) else ""
+        val doSearch = (image == null) && (forceWebSearch || shouldAutoSearchWeb(effectiveText))
+        val webContext = if (doSearch) searchWebLive(effectiveText) else ""
 
         val sysPrompt = buildString {
             append(activePersona.instruction)
+            if (image != null) {
+                append("\nYou have direct vision access to the attached image. Carefully scan and read all text, questions, multiple-choice options, formulas, tables, diagrams, or visual elements in the image. Follow the user's instruction accurately—if they ask to answer questions or solve problems in the image, answer every question clearly and step-by-step without skipping items.")
+            }
             if (iq == IntelligenceLevel.DEEP_THINK) {
                 append("\nThink step-by-step and verify logic carefully before writing the final answer. Present a clear, well-structured, comprehensive response.")
             } else {
@@ -477,11 +500,11 @@ class VexaCoreClient(
         var lastErr = ""
         for (m in candidateModels) {
             try {
-                val raw = callGateway(m, text, image, sysPrompt, includeHistory = true, temperature = temp)
+                val raw = callGateway(m, effectiveText, image, sysPrompt, includeHistory = true, temperature = temp)
                     .replace(Regex("<think>[\\s\\S]*?</think>"), "")
                     .trim()
                 if (raw.isNotEmpty()) {
-                    val userLog = if (image != null) "[Image] $text" else text
+                    val userLog = if (image != null) "[Image] $effectiveText" else effectiveText
                     history.add("user" to userLog)
                     history.add("model" to raw)
                     while (history.size > maxHistory) history.removeAt(0)
@@ -505,13 +528,13 @@ class VexaCoreClient(
     }
 
     private fun bitmapToDataUrl(bmp: Bitmap): String {
-        val maxDim = 900
+        val maxDim = 1280
         val scale = minOf(maxDim.toFloat() / bmp.width, maxDim.toFloat() / bmp.height, 1f)
         val resized = if (scale < 1f) {
             Bitmap.createScaledBitmap(bmp, (bmp.width * scale).toInt(), (bmp.height * scale).toInt(), true)
         } else bmp
         val baos = ByteArrayOutputStream()
-        resized.compress(Bitmap.CompressFormat.JPEG, 82, baos)
+        resized.compress(Bitmap.CompressFormat.JPEG, 88, baos)
         return "data:image/jpeg;base64," + Base64.encodeToString(baos.toByteArray(), Base64.NO_WRAP)
     }
 
@@ -532,7 +555,7 @@ class VexaCoreClient(
         }
         if (image != null) {
             val arr = JSONArray()
-            arr.put(JSONObject().put("type", "text").put("text", text.ifBlank { "Analyze this image." }))
+            arr.put(JSONObject().put("type", "text").put("text", text.ifBlank { "Analyze this image and answer any questions in it." }))
             arr.put(JSONObject().put("type", "image_url").put("image_url", JSONObject().put("url", bitmapToDataUrl(image))))
             messages.put(JSONObject().put("role", "user").put("content", arr))
         } else {
