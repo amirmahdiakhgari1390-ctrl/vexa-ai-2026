@@ -58,11 +58,9 @@ class VexaCoreClient(
     }
 
     private val deepModels = listOf(
-        "deepseek/deepseek-r1:free",
-        "deepseek/deepseek-chat-v3-0324:free",
-        "qwen/qwen3-235b-a22b:free",
-        "meta-llama/llama-3.3-70b-instruct:free",
         "google/gemma-3-27b-it:free",
+        "meta-llama/llama-3.3-70b-instruct:free",
+        "deepseek/deepseek-chat-v3-0324:free",
         "openrouter/free",
         "openai"
     )
@@ -70,43 +68,40 @@ class VexaCoreClient(
     private val fastModels = listOf(
         "google/gemma-3-27b-it:free",
         "meta-llama/llama-3.3-70b-instruct:free",
-        "deepseek/deepseek-chat-v3-0324:free",
         "openrouter/free",
         "openai"
     )
 
-    // مدل‌های اولویت‌دار برای اسکن و تحلیل تصویر (شامل سوالات، متن، جدول و اشیا)
     private val visionModels = listOf(
         "google/gemma-3-27b-it:free",
-        "qwen/qwen3-235b-a22b:free",
         "meta-llama/llama-3.3-70b-instruct:free",
         "openrouter/free",
         "openai"
     )
 
-    private val maxHistory = 36
+    private val maxHistory = 24
     private val history = ArrayList<Pair<String, String>>()
 
     enum class Persona(val titleEn: String, val titleFa: String, val instruction: String) {
         ASSISTANT(
             "Vexa Global AI",
             "وِکسا هوشمند",
-            "You are Vexa AI — a high-IQ, structured, accurate multilingual assistant. Analyze carefully, verify facts, structure answers clearly, and respond fluently in the exact language of the user's message."
+            "You are Vexa AI — a clear, accurate, structured multilingual assistant. Respond fluently in the exact language of the user's message."
         ),
         TRADER(
             "Market Analyst",
             "تحلیلگر بازار",
-            "You are Vexa AI in Market Analyst mode. Provide structured market analysis, scenarios, key levels, risk management, and clear caveats without financial guarantees."
+            "You are Vexa AI in Market Analyst mode. Provide structured market analysis, key levels, risk management, and clear caveats."
         ),
         CODER(
             "Software Engineer",
             "مهندس نرم‌افزار",
-            "You are Vexa AI in Software Engineer mode. Write clean, bug-free, production-ready code with clear architectural explanations and edge-case handling."
+            "You are Vexa AI in Software Engineer mode. Write clean, working code with clear explanations."
         ),
         TUTOR(
             "Language Tutor",
             "مترجم و مدرس زبان",
-            "You are Vexa AI in Language Tutor mode. Translate and explain accurately with natural phrasing and helpful examples."
+            "You are Vexa AI in Language Tutor mode. Translate and explain accurately with natural phrasing."
         )
     }
 
@@ -123,14 +118,18 @@ class VexaCoreClient(
 
     fun getPersona(): Persona {
         val name = prefs.getString("persona", Persona.ASSISTANT.name) ?: Persona.ASSISTANT.name
-        return try { Persona.valueOf(name) } catch (_: Exception) { Persona.ASSISTANT }
+        return try {
+            Persona.valueOf(name)
+        } catch (_: Exception) {
+            Persona.ASSISTANT
+        }
     }
 
     fun setPersona(p: Persona) = prefs.edit().putString("persona", p.name).apply()
 
     fun getIntelligenceLevel(): IntelligenceLevel {
-        val saved = prefs.getString("iq_level", IntelligenceLevel.DEEP_THINK.id)
-        return IntelligenceLevel.values().firstOrNull { it.id == saved } ?: IntelligenceLevel.DEEP_THINK
+        val saved = prefs.getString("iq_level", IntelligenceLevel.FAST.id)
+        return IntelligenceLevel.values().firstOrNull { it.id == saved } ?: IntelligenceLevel.FAST
     }
 
     fun setIntelligenceLevel(level: IntelligenceLevel) =
@@ -167,7 +166,8 @@ class VexaCoreClient(
                         .replace(Regex("^[\"']|[\"']$"), "")
                         .trim()
                     if (tr.length >= 3) return tr
-                } catch (_: Exception) { }
+                } catch (_: Exception) {
+                }
             }
         }
         return if (isLogo) {
@@ -203,8 +203,8 @@ class VexaCoreClient(
         var conn: HttpURLConnection? = null
         return try {
             conn = URL("$base/video?prompt=$enc").openConnection() as HttpURLConnection
-            conn.connectTimeout = 15000
-            conn.readTimeout = 45000
+            conn.connectTimeout = 8000
+            conn.readTimeout = 20000
             conn.setRequestProperty("User-Agent", "VexaAI-Android/17.0")
             if (conn.responseCode == 200) {
                 val cType = conn.contentType.orEmpty().lowercase(Locale.ROOT)
@@ -224,7 +224,10 @@ class VexaCoreClient(
         } catch (_: Exception) {
             null
         } finally {
-            try { conn?.disconnect() } catch (_: Exception) { }
+            try {
+                conn?.disconnect()
+            } catch (_: Exception) {
+            }
         }
     }
 
@@ -320,8 +323,8 @@ class VexaCoreClient(
             var conn: HttpURLConnection? = null
             try {
                 conn = URL(u).openConnection() as HttpURLConnection
-                conn.connectTimeout = 10000
-                conn.readTimeout = 25000
+                conn.connectTimeout = 7000
+                conn.readTimeout = 18000
                 conn.instanceFollowRedirects = true
                 conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 14)")
                 conn.setRequestProperty("Accept", "image/*,*/*")
@@ -334,7 +337,10 @@ class VexaCoreClient(
                 }
             } catch (_: Exception) {
             } finally {
-                try { conn?.disconnect() } catch (_: Exception) { }
+                try {
+                    conn?.disconnect()
+                } catch (_: Exception) {
+                }
             }
         }
         return renderFallbackFrame(rawTitle, isLogo, sceneIdx)
@@ -349,8 +355,8 @@ class VexaCoreClient(
         var conn: HttpURLConnection? = null
         try {
             conn = URL("$base/search?q=$enc").openConnection() as HttpURLConnection
-            conn.connectTimeout = 12000
-            conn.readTimeout = 20000
+            conn.connectTimeout = 5000
+            conn.readTimeout = 7000
             conn.setRequestProperty("User-Agent", "VexaAI-Android/17.0")
             if (conn.responseCode == 200) {
                 val raw = conn.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
@@ -371,16 +377,20 @@ class VexaCoreClient(
             }
         } catch (_: Exception) {
         } finally {
-            try { conn?.disconnect() } catch (_: Exception) { }
+            try {
+                conn?.disconnect()
+            } catch (_: Exception) {
+            }
         }
 
         if (sb.isEmpty()) {
+            var wConn: HttpURLConnection? = null
             try {
                 val lang = if (isFa) "fa" else "en"
-                val wUrl = "https://$lang.wikipedia.org/w/api.php?action=query&list=search&srsearch=$enc&format=json&srlimit=4"
-                val wConn = URL(wUrl).openConnection() as HttpURLConnection
-                wConn.connectTimeout = 10000
-                wConn.readTimeout = 15000
+                val wUrl = "https://$lang.wikipedia.org/w/api.php?action=query&list=search&srsearch=$enc&format=json&srlimit=3"
+                wConn = URL(wUrl).openConnection() as HttpURLConnection
+                wConn.connectTimeout = 4500
+                wConn.readTimeout = 5500
                 wConn.setRequestProperty("User-Agent", "VexaAI-Android/17.0")
                 if (wConn.responseCode == 200) {
                     val wTxt = wConn.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
@@ -396,27 +406,13 @@ class VexaCoreClient(
                         }
                     }
                 }
-                wConn.disconnect()
-            } catch (_: Exception) { }
-        }
-
-        val low = query.lowercase(Locale.ROOT)
-        if (Regex("(طلا|gold|سکه|دلار|xau)").containsMatchIn(low) && !sb.contains("XAU/USD")) {
-            try {
-                val gConn = URL("https://data-asg.goldprice.org/dbXRates/USD").openConnection() as HttpURLConnection
-                gConn.connectTimeout = 8000
-                gConn.readTimeout = 10000
-                gConn.setRequestProperty("User-Agent", "Mozilla/5.0")
-                if (gConn.responseCode == 200) {
-                    val gTxt = gConn.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
-                    val item = JSONObject(gTxt).optJSONArray("items")?.optJSONObject(0)
-                    val xau = item?.optDouble("xauPrice", 0.0) ?: 0.0
-                    if (xau > 0.0) {
-                        sb.append("- Global Spot Gold (XAU/USD): $").append(xau).append(" per troy oz\n")
-                    }
+            } catch (_: Exception) {
+            } finally {
+                try {
+                    wConn?.disconnect()
+                } catch (_: Exception) {
                 }
-                gConn.disconnect()
-            } catch (_: Exception) { }
+            }
         }
 
         return sb.toString().trim()
@@ -432,14 +428,15 @@ class VexaCoreClient(
     @Synchronized
     fun generateRawFileContent(ext: String, topic: String): String? {
         val sys = "Output ONLY clean, complete raw content for a .$ext file about the request. No markdown fences (```)."
-        for (m in deepModels) {
+        for (m in fastModels) {
             try {
                 val res = callGateway(m, "Format: .$ext\nTopic: $topic", null, sys, includeHistory = false, temperature = 0.3)
                     .replace(Regex("^```[a-zA-Z]*\\n?"), "")
                     .replace(Regex("\\n?```$"), "")
                     .trim()
                 if (res.isNotEmpty()) return res
-            } catch (_: Exception) { }
+            } catch (_: Exception) {
+            }
         }
         return null
     }
@@ -468,7 +465,7 @@ class VexaCoreClient(
         } else {
             fastModels
         }
-        val temp = if (image != null) 0.2 else if (iq == IntelligenceLevel.DEEP_THINK) 0.35 else 0.55
+        val temp = if (image != null) 0.2 else if (iq == IntelligenceLevel.DEEP_THINK) 0.35 else 0.5
 
         val doSearch = (image == null) && (forceWebSearch || shouldAutoSearchWeb(effectiveText))
         val webContext = if (doSearch) searchWebLive(effectiveText) else ""
@@ -476,23 +473,17 @@ class VexaCoreClient(
         val sysPrompt = buildString {
             append(activePersona.instruction)
             if (image != null) {
-                append("\nYou have direct vision access to the attached image. Carefully scan and read all text, questions, multiple-choice options, formulas, tables, diagrams, or visual elements in the image. Follow the user's instruction accurately—if they ask to answer questions or solve problems in the image, answer every question clearly and step-by-step without skipping items.")
-            }
-            if (iq == IntelligenceLevel.DEEP_THINK) {
-                append("\nThink step-by-step and verify logic carefully before writing the final answer. Present a clear, well-structured, comprehensive response.")
-            } else {
-                append("\nGive a direct, clear, and concise answer.")
+                append("\nCarefully scan and read all text, questions, options, formulas, tables, or details in the image and answer clearly and accurately.")
             }
             if (userDisplayName.isNotBlank()) append("\nUser: $userDisplayName.")
             if (isFa) {
-                append("\nReply clearly, accurately, and naturally in Persian. Never say you cannot browse or lack access when live data is provided below; use the provided data directly.")
+                append("\nReply clearly, accurately, and naturally in Persian.")
             } else {
-                append("\nDetect the user's language and reply fluently in that exact same language. Use provided live search results directly.")
+                append("\nDetect the user's language and reply fluently in that exact same language.")
             }
             if (webContext.isNotEmpty()) {
-                append("\n\n[LIVE WEB & MARKET DATA]:\n")
+                append("\n\n[LIVE WEB DATA]:\n")
                 append(webContext)
-                append("\nUse these live results directly to answer accurately.")
             }
             append(memory.asPromptContext())
         }
@@ -528,13 +519,13 @@ class VexaCoreClient(
     }
 
     private fun bitmapToDataUrl(bmp: Bitmap): String {
-        val maxDim = 1280
+        val maxDim = 1024
         val scale = minOf(maxDim.toFloat() / bmp.width, maxDim.toFloat() / bmp.height, 1f)
         val resized = if (scale < 1f) {
             Bitmap.createScaledBitmap(bmp, (bmp.width * scale).toInt(), (bmp.height * scale).toInt(), true)
         } else bmp
         val baos = ByteArrayOutputStream()
-        resized.compress(Bitmap.CompressFormat.JPEG, 88, baos)
+        resized.compress(Bitmap.CompressFormat.JPEG, 82, baos)
         return "data:image/jpeg;base64," + Base64.encodeToString(baos.toByteArray(), Base64.NO_WRAP)
     }
 
@@ -549,7 +540,7 @@ class VexaCoreClient(
         val messages = JSONArray()
         messages.put(JSONObject().put("role", "system").put("content", systemInstruction))
         if (includeHistory) {
-            for ((role, t) in history) {
+            for ((role, t) in history.takeLast(8)) {
                 messages.put(JSONObject().put("role", if (role == "model") "assistant" else "user").put("content", t))
             }
         }
@@ -571,30 +562,31 @@ class VexaCoreClient(
                 .put("model", effModel)
                 .put("temperature", temperature)
                 .put("messages", messages)
-            for (attempt in 1..2) {
-                var conn: HttpURLConnection? = null
-                try {
-                    conn = URL(ep).openConnection() as HttpURLConnection
-                    conn.requestMethod = "POST"
-                    conn.connectTimeout = 15000
-                    conn.readTimeout = 60000
-                    conn.doOutput = true
-                    conn.setRequestProperty("Content-Type", "application/json; charset=utf-8")
-                    conn.setRequestProperty("Connection", "close")
-                    conn.setRequestProperty("User-Agent", "VexaAI-Android/17.0")
-                    conn.outputStream.use { it.write(body.toString().toByteArray(Charsets.UTF_8)) }
 
-                    if (conn.responseCode != 200) throw IOException("HTTP ${conn.responseCode}")
-                    val resp = conn.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
-                    val choices = JSONObject(resp).optJSONArray("choices") ?: throw IOException("Empty choices")
-                    if (choices.length() == 0) throw IOException("No choice")
-                    val content = choices.getJSONObject(0).getJSONObject("message").optString("content", "")
-                    if (content.isNotBlank()) return content
-                } catch (e: Exception) {
-                    lastEx = e
-                    try { Thread.sleep(350L) } catch (_: InterruptedException) { }
-                } finally {
-                    try { conn?.disconnect() } catch (_: Exception) { }
+            var conn: HttpURLConnection? = null
+            try {
+                conn = URL(ep).openConnection() as HttpURLConnection
+                conn.requestMethod = "POST"
+                conn.connectTimeout = 8000
+                conn.readTimeout = 20000
+                conn.doOutput = true
+                conn.setRequestProperty("Content-Type", "application/json; charset=utf-8")
+                conn.setRequestProperty("Connection", "close")
+                conn.setRequestProperty("User-Agent", "VexaAI-Android/17.0")
+                conn.outputStream.use { it.write(body.toString().toByteArray(Charsets.UTF_8)) }
+
+                if (conn.responseCode != 200) throw IOException("HTTP ${conn.responseCode}")
+                val resp = conn.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
+                val choices = JSONObject(resp).optJSONArray("choices") ?: throw IOException("Empty choices")
+                if (choices.length() == 0) throw IOException("No choice")
+                val content = choices.getJSONObject(0).getJSONObject("message").optString("content", "")
+                if (content.isNotBlank()) return content
+            } catch (e: Exception) {
+                lastEx = e
+            } finally {
+                try {
+                    conn?.disconnect()
+                } catch (_: Exception) {
                 }
             }
         }
