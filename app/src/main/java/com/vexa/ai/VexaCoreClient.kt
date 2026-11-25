@@ -57,6 +57,13 @@ class VexaCoreClient(
         FAST("fast", "پاسخ سریع (Fast)", "Fast")
     }
 
+    private enum class ImageIntent {
+        SOLVE_QUESTIONS,
+        OCR_EXTRACT,
+        CODE_OR_TECH,
+        VISUAL_ANALYSIS
+    }
+
     private val deepModels = listOf(
         "google/gemma-3-27b-it:free",
         "meta-llama/llama-3.3-70b-instruct:free",
@@ -72,9 +79,9 @@ class VexaCoreClient(
         "openai"
     )
 
+    // فقط مدل‌های سازگار با ورودی تصویر در اولویت بینایی قرار می‌گیرند
     private val visionModels = listOf(
         "google/gemma-3-27b-it:free",
-        "meta-llama/llama-3.3-70b-instruct:free",
         "openrouter/free",
         "openai"
     )
@@ -145,6 +152,31 @@ class VexaCoreClient(
             if (m.senderName == "USER") history.add("user" to m.text)
             else if (m.senderName == "VEXA") history.add("model" to m.text)
         }
+    }
+
+    private fun detectImageIntent(prompt: String): ImageIntent {
+        val low = prompt.lowercase(Locale.ROOT)
+        return when {
+            Regex("(جواب|پاسخ|حل|سوال|سؤال|تست|گزینه|مسئله|تمرین|برگه|answer|solve|question|quiz|test|homework)").containsMatchIn(low) ->
+                ImageIntent.SOLVE_QUESTIONS
+            Regex("(متن|بنویس|تایپ|استخراج|اسکن|ترجمه|ocr|read text|extract|transcribe|translate)").containsMatchIn(low) ->
+                ImageIntent.OCR_EXTRACT
+            Regex("(کد|برنامه|ارور|خطا|باگ|اسکریپت|فرمول|code|bug|error|script|formula)").containsMatchIn(low) ->
+                ImageIntent.CODE_OR_TECH
+            else ->
+                ImageIntent.VISUAL_ANALYSIS
+        }
+    }
+
+    private fun buildVisionDirective(intent: ImageIntent): String = when (intent) {
+        ImageIntent.SOLVE_QUESTIONS ->
+            "\n[VISION TASK: QUESTION SOLVER & OCR] First read every question, number, option, and diagram accurately from the image. Then answer each requested question clearly, numbering answers to match the questions, and explain steps concisely."
+        ImageIntent.OCR_EXTRACT ->
+            "\n[VISION TASK: OCR & TEXT EXTRACTION] Accurately read and transcribe all visible text, numbers, labels, and tables from the image in order without omitting words, then fulfill the user's instruction."
+        ImageIntent.CODE_OR_TECH ->
+            "\n[VISION TASK: CODE & TECHNICAL SCAN] Read all code lines, error messages, logs, or technical diagrams in the image accurately, identify issues/behavior, and provide clear, working solutions."
+        ImageIntent.VISUAL_ANALYSIS ->
+            "\n[VISION TASK: MULTIMODAL SCENE & OBJECT ANALYSIS] Inspect objects, visible text, context, and relationships in the image carefully and answer the user's request directly and clearly."
     }
 
     private fun craftRichVisualPrompt(rawUserRequest: String, isLogo: Boolean): String {
@@ -450,6 +482,7 @@ class VexaCoreClient(
         userDisplayName: String = ""
     ): AiResult {
         memory.autoLearnFromUserMessage(text)
+        val imageIntent = if (image != null) detectImageIntent(text) else null
         val effectiveText = if (image != null && text.isBlank()) {
             "تمام متن‌ها، سوالات، گزینه‌ها، اعداد و جزئیات این عکس را با دقت بخوان و به هر سوال داخل آن پاسخ کامل و دقیق بده."
         } else {
@@ -472,8 +505,8 @@ class VexaCoreClient(
 
         val sysPrompt = buildString {
             append(activePersona.instruction)
-            if (image != null) {
-                append("\nCarefully scan and read all text, questions, options, formulas, tables, or details in the image and answer clearly and accurately.")
+            if (image != null && imageIntent != null) {
+                append(buildVisionDirective(imageIntent))
             }
             if (userDisplayName.isNotBlank()) append("\nUser: $userDisplayName.")
             if (isFa) {
